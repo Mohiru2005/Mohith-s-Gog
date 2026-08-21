@@ -13,13 +13,24 @@ import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { SoundProvider } from "@/lib/SoundProvider";
+import { isOfflineApp } from "@/lib/runtime-mode";
+import { MaintenancePage } from "../pages/maintenance/maintenance-page";
 
 // Lazy load Layout component for better code splitting
 const Layout = lazy(() =>
   import("../components/Layout").then((module) => ({ default: module.Layout })),
 );
 
-function RootComponent() {
+function OfflineRoot() {
+  return (
+    <div className="min-h-screen">
+      <MaintenancePage />
+      <Toaster theme="dark" className="rounded-2xl" />
+    </div>
+  );
+}
+
+function OnlineRoot() {
   const { data: profile } = useConvexQuery(api.profiles.getCurrentProfile);
   const [lobbyInviteHandler, setLobbyInviteHandler] = useState<
     ((lobbyId: Id<"lobbies">) => void) | null
@@ -72,6 +83,14 @@ function RootComponent() {
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </div>
   );
+}
+
+function RootComponent() {
+  if (isOfflineApp) {
+    return <OfflineRoot />;
+  }
+
+  return <OnlineRoot />;
 }
 
 export const Route = createRootRoute({

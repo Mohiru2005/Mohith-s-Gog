@@ -4,6 +4,7 @@
 interface ImportMetaEnv {
   readonly VITE_VAPID_PUBLIC_KEY?: string;
   readonly VITE_MAINTENANCE_MODE?: string;
+  readonly VITE_CONVEX_URL?: string;
 }
 
 interface ImportMeta {

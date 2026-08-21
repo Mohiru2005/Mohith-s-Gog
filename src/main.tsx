@@ -1,3 +1,4 @@
+import { type ReactNode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient, ConvexProvider } from "convex/react";
@@ -13,24 +14,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
-
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
-
-// Create ConvexQueryClient and connect to TanStack Query
-const convexQueryClient = new ConvexQueryClient(convex);
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      queryKeyHashFn: convexQueryClient.hashFn(),
-      queryFn: convexQueryClient.queryFn(),
-      // Keep subscriptions active for 5 minutes after unmount
-      gcTime: 5 * 60 * 1000,
-      // Reduce stale time since Convex data is never stale
-      staleTime: 0,
-    },
-  },
-});
-convexQueryClient.connect(queryClient);
+import { convexDeploymentUrl } from "./lib/runtime-mode";
 
 // Create a new router instance
 const router = createRouter({
@@ -46,25 +30,69 @@ declare module "@tanstack/react-router" {
   }
 }
 
-createRoot(document.getElementById("root")!).render(
-  <ConvexProvider client={convex}>
-    <ConvexAuthProvider client={convex}>
-      <ConvexQueryCacheProvider>
-        <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
-          {import.meta.env.NODE_ENV === "production" && (
-            <>
-              <Analytics />
-              <SpeedInsights />
-            </>
-          )}
-          {/* Add React Query DevTools for development only */}
-          {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
-        </QueryClientProvider>
-      </ConvexQueryCacheProvider>
-    </ConvexAuthProvider>
-  </ConvexProvider>,
-);
+function ConvexAppProviders({
+  url,
+  children,
+}: {
+  url: string;
+  children: ReactNode;
+}) {
+  const [{ convex, queryClient }] = useState(() => {
+    const client = new ConvexReactClient(url);
+    const convexQueryClient = new ConvexQueryClient(client);
+    const tanstackQueryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          queryKeyHashFn: convexQueryClient.hashFn(),
+          queryFn: convexQueryClient.queryFn(),
+          gcTime: 5 * 60 * 1000,
+          staleTime: 0,
+        },
+      },
+    });
+    convexQueryClient.connect(tanstackQueryClient);
+    return { convex: client, queryClient: tanstackQueryClient };
+  });
+
+  return (
+    <ConvexProvider client={convex}>
+      <ConvexAuthProvider client={convex}>
+        <ConvexQueryCacheProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+            {import.meta.env.DEV && (
+              <ReactQueryDevtools initialIsOpen={false} />
+            )}
+          </QueryClientProvider>
+        </ConvexQueryCacheProvider>
+      </ConvexAuthProvider>
+    </ConvexProvider>
+  );
+}
+
+function AppTree() {
+  const tree = (
+    <>
+      <RouterProvider router={router} />
+      {import.meta.env.NODE_ENV === "production" && (
+        <>
+          <Analytics />
+          <SpeedInsights />
+        </>
+      )}
+    </>
+  );
+
+  if (!convexDeploymentUrl) {
+    return tree;
+  }
+
+  return (
+    <ConvexAppProviders url={convexDeploymentUrl}>{tree}</ConvexAppProviders>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<AppTree />);
 
 // Register PWA update checker
 if (typeof window !== "undefined" && !import.meta.env.DEV) {
