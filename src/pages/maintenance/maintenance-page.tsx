@@ -3,6 +3,7 @@ import {
   Mail,
   Linkedin,
   MessageCircle,
+  Github,
   Shield,
   Globe,
   Terminal,
@@ -16,6 +17,7 @@ const CONTACT = {
   email: "catimbanggabriel@gmail.com",
   linkedin: "https://www.linkedin.com/in/gabrielcatimbang/",
   messenger: "https://m.me/gab.cat30",
+  github: "https://github.com/gab-cat/games-of-the-generals",
 } as const;
 
 export function MaintenancePage() {
@@ -163,7 +165,21 @@ export function MaintenancePage() {
                 {CONTACT.email}
               </a>
 
-              <div className="grid grid-cols-2 gap-3 mt-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="bg-zinc-900/50 border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600 hover:text-white text-zinc-300 rounded-sm font-mono text-xs h-10 gap-2 transition-all"
+                >
+                  <a
+                    href={CONTACT.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Github className="w-4 h-4" />
+                    GITHUB
+                  </a>
+                </Button>
                 <Button
                   asChild
                   variant="outline"

@@ -8,6 +8,18 @@
 
 > **A classic Filipino strategy board game brought to life online** - Battle of wits in real-time multiplayer matches against players worldwide or challenge AI opponents!
 
+## Support this project
+
+The live app is currently offline. Running the servers has become too expensive for me to cover on my own.
+
+If you'd like to help bring Games of the Generals back online, a donation or any support would mean a lot. Please reach out:
+
+- **Email:** [catimbanggabriel@gmail.com](mailto:catimbanggabriel@gmail.com)
+- **LinkedIn:** [gabrielcatimbang](https://www.linkedin.com/in/gabrielcatimbang/)
+- **Messenger:** [m.me/gab.cat30](https://m.me/gab.cat30)
+
+Thank you for playing.
+
 ![Games of the Generals Gameplay](public/screenshots/wide-1200x630.png)
 
 ## 🎮 What is Games of the Generals?
