@@ -49,7 +49,7 @@ export function saveOnlineRooms(rooms: Record<string, OnlineRoom>): void {
   } catch (e) {}
 }
 
-// Sync room state to global cloud REST API so any 2 devices on Earth stay 100% in sync
+// Sync room state to global cloud REST API
 async function syncRoomToCloud(room: OnlineRoom): Promise<void> {
   if (typeof window === "undefined") return;
   const cleanId = room.roomId.toUpperCase().trim();
@@ -78,7 +78,6 @@ async function syncRoomToCloud(room: OnlineRoom): Promise<void> {
   } catch (e) {}
 }
 
-// Fetch room state from global cloud REST API
 export async function fetchRoomFromCloud(roomId: string): Promise<OnlineRoom | null> {
   const cleanId = roomId.toUpperCase().trim();
   try {
@@ -91,7 +90,6 @@ export async function fetchRoomFromCloud(roomId: string): Promise<OnlineRoom | n
       }
     }
 
-    // Search by room code name
     const searchRes = await fetch(`${CLOUD_API_BASE}`);
     if (searchRes.ok) {
       const items: any[] = await searchRes.json();
@@ -156,11 +154,23 @@ export function submitPlayerSetup(
   roomId: string,
   player: "player1" | "player2",
   setupBoard: BoardState
-): OnlineRoom | null {
+): OnlineRoom {
   const cleanId = roomId.toUpperCase().trim();
   const rooms = getOnlineRooms();
-  const room = rooms[cleanId];
-  if (!room || room.status === "canceled") return null;
+  let room = rooms[cleanId];
+
+  if (!room) {
+    room = {
+      roomId: cleanId,
+      hostUsername: "Host_Commander",
+      joinUsername: "Challenger_Commander",
+      player1Ready: false,
+      player2Ready: false,
+      status: "setup",
+      createdAt: Date.now(),
+    };
+    rooms[cleanId] = room;
+  }
 
   if (player === "player1") {
     room.player1Board = setupBoard;
@@ -170,8 +180,8 @@ export function submitPlayerSetup(
     room.player2Ready = true;
   }
 
-  // Combine boards when BOTH setups are ready
-  if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
+  // Combine boards when BOTH setups exist
+  if (room.player1Board && room.player2Board) {
     const combinedBoard = Array(BOARD_ROWS)
       .fill(null)
       .map(() => Array(BOARD_COLS).fill(null));
@@ -191,6 +201,8 @@ export function submitPlayerSetup(
       history: [],
     };
     room.status = "playing";
+    room.player1Ready = true;
+    room.player2Ready = true;
   }
 
   saveOnlineRooms(rooms);
