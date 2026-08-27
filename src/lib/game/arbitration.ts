@@ -11,7 +11,17 @@ export function arbitrateBattle(attacker: Piece, defender: Piece): BattleResult 
   const attackerRank = attacker.rank;
   const defenderRank = defender.rank;
 
-  // Flag capture
+  // Flag vs Flag
+  if (attackerRank === "Flag" && defenderRank === "Flag") {
+    return {
+      winner: "attacker",
+      winningPiece: attacker,
+      defeatedPiece: defender,
+      flagCaptured: true,
+    };
+  }
+
+  // Flag capture by non-flag piece
   if (defenderRank === "Flag") {
     return {
       winner: "attacker",
@@ -20,6 +30,8 @@ export function arbitrateBattle(attacker: Piece, defender: Piece): BattleResult 
       flagCaptured: true,
     };
   }
+
+  // Flag attacking non-flag piece loses
   if (attackerRank === "Flag") {
     return {
       winner: "defender",
@@ -39,7 +51,7 @@ export function arbitrateBattle(attacker: Piece, defender: Piece): BattleResult 
     };
   }
 
-  // Spy vs Private interaction
+  // Spy vs Private interaction (Private eliminates Spy)
   if (attackerRank === "Spy" && defenderRank === "Private") {
     return {
       winner: "defender",
@@ -57,7 +69,7 @@ export function arbitrateBattle(attacker: Piece, defender: Piece): BattleResult 
     };
   }
 
-  // Spy vs Any other piece
+  // Spy vs Any other Officer or General (Spy eliminates Officer/General)
   if (attackerRank === "Spy") {
     return {
       winner: "attacker",
@@ -75,7 +87,7 @@ export function arbitrateBattle(attacker: Piece, defender: Piece): BattleResult 
     };
   }
 
-  // Rank comparison
+  // Rank comparison for Generals & Officers
   const valAttacker = PIECE_RANKS[attackerRank];
   const valDefender = PIECE_RANKS[defenderRank];
 
