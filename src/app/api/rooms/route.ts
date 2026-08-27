@@ -81,23 +81,14 @@ export async function POST(request: Request) {
         room.player2Ready = true;
       }
 
-      // Auto-combine boards and start playing
-      if (room.player1Board || room.player2Board) {
+      // Strictly require BOTH players to be ready before combining boards and launching match
+      if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
-        if (room.player1Board) {
-          for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 9; c++) {
-              if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
-            }
-          }
-        }
-
-        if (room.player2Board) {
-          for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 9; c++) {
-              if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
-            }
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
+            if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
           }
         }
 

@@ -1,4 +1,4 @@
-import { BOARD_COLS, BOARD_ROWS, BoardState, INITIAL_PIECES_LIST } from "./constants";
+import { BOARD_COLS, BOARD_ROWS, BoardState } from "./constants";
 import { GameState, makeMove, Position } from "./engine";
 
 export interface OnlineRoom {
@@ -129,39 +129,27 @@ export function submitPlayerSetup(
     room.player2Ready = true;
   }
 
-  // Combine boards whenever both setups exist OR if forcing match launch
-  if (room.player1Ready || room.player2Ready) {
+  // Strictly require BOTH players to be ready before combining boards and starting
+  if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
     const combinedBoard = Array(BOARD_ROWS)
       .fill(null)
       .map(() => Array(BOARD_COLS).fill(null));
 
-    if (room.player1Board) {
-      for (let r = 0; r < BOARD_ROWS; r++) {
-        for (let c = 0; c < BOARD_COLS; c++) {
-          if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
-        }
+    for (let r = 0; r < BOARD_ROWS; r++) {
+      for (let c = 0; c < BOARD_COLS; c++) {
+        if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
+        if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
       }
     }
 
-    if (room.player2Board) {
-      for (let r = 0; r < BOARD_ROWS; r++) {
-        for (let c = 0; c < BOARD_COLS; c++) {
-          if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
-        }
-      }
-    }
-
-    // Launch playing state when both ready
-    if (room.player1Ready && room.player2Ready) {
-      room.gameState = {
-        board: combinedBoard,
-        currentTurn: "player1",
-        status: "playing",
-        winner: null,
-        history: [],
-      };
-      room.status = "playing";
-    }
+    room.gameState = {
+      board: combinedBoard,
+      currentTurn: "player1",
+      status: "playing",
+      winner: null,
+      history: [],
+    };
+    room.status = "playing";
   }
 
   saveOnlineRooms(rooms);
