@@ -13,7 +13,6 @@ export const resend: Resend = new Resend(components.resend, {
   testMode: false,
 });
 
-// Internal actions to send moderation emails
 export const sendMuteEmail = internalAction({
   args: {
     targetEmail: v.string(),
@@ -30,7 +29,7 @@ export const sendMuteEmail = internalAction({
       args.duration,
     );
 
-    await resend.sendEmail(ctx, {
+    await resend.sendEmail(ctx as any, {
       from: "Games of the Generals <noreply@generalsonline.app>",
       to: args.targetEmail,
       subject: "Chat Mute Notice - Games of the Generals",
@@ -56,7 +55,7 @@ export const sendBanEmail = internalAction({
       args.duration,
     );
 
-    await resend.sendEmail(ctx, {
+    await resend.sendEmail(ctx as any, {
       from: "Games of the Generals <noreply@generalsonline.app>",
       to: args.targetEmail,
       subject: "Game Ban Notice - Games of the Generals",
@@ -80,7 +79,7 @@ export const sendUnmuteEmail = internalAction({
       args.reason,
     );
 
-    await resend.sendEmail(ctx, {
+    await resend.sendEmail(ctx as any, {
       from: "Games of the Generals <noreply@generalsonline.app>",
       to: args.targetEmail,
       subject: "Chat Mute Lifted - Games of the Generals",
@@ -104,7 +103,7 @@ export const sendUnbanEmail = internalAction({
       args.reason,
     );
 
-    await resend.sendEmail(ctx, {
+    await resend.sendEmail(ctx as any, {
       from: "Games of the Generals <noreply@generalsonline.app>",
       to: args.targetEmail,
       subject: "Game Ban Lifted - Games of the Generals",

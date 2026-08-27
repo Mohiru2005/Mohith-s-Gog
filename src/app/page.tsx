@@ -4,7 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/auth/AuthModal";
-import { Swords, Shield, Sparkles, LogIn, UserPlus, ArrowRight, Cpu, Zap, Radio } from "lucide-react";
+import { AdminPanel } from "@/components/admin/AdminPanel";
+import { Swords, Shield, LogIn, UserPlus, ArrowRight, Cpu, Zap, ShieldAlert } from "lucide-react";
 
 export default function WelcomePage() {
   const { user } = useAuth();
@@ -15,6 +16,8 @@ export default function WelcomePage() {
     setAuthTab(tab);
     setIsAuthOpen(true);
   };
+
+  const isAdmin = user?.username.toLowerCase() === "admin";
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-10 py-6 select-none">
@@ -50,7 +53,9 @@ export default function WelcomePage() {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-white">{user.username}</h3>
-                  <p className="text-xs text-cyan-400 font-bold">Commander Active</p>
+                  <p className="text-xs text-cyan-400 font-bold">
+                    {isAdmin ? "System Administrator" : "Commander Active"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -94,6 +99,9 @@ export default function WelcomePage() {
           </div>
         )}
       </div>
+
+      {/* Admin Control Panel (Visible only when logged in as admin/admin) */}
+      {isAdmin && <AdminPanel />}
 
       {/* Quantum Feature Highlights Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">

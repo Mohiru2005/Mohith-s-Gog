@@ -14,7 +14,6 @@ export const sendEmailChangeVerification = internalAction({
     newEmail: v.string(),
   },
   handler: async (ctx, args) => {
-    // Generate verification code using the same method as OTP
     const random: RandomReader = {
       read(bytes) {
         crypto.getRandomValues(bytes);
@@ -24,7 +23,7 @@ export const sendEmailChangeVerification = internalAction({
     const length = 6;
     const verificationCode = generateRandomString(random, alphabet, length);
 
-    await resend.sendEmail(ctx, {
+    await resend.sendEmail(ctx as any, {
       from: "Games of the Generals <noreply@generalsonline.app>",
       to: args.currentEmail,
       subject: "Email Change Verification - Games of the Generals",

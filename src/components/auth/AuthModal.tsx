@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Cpu, X, LogIn, UserPlus, User, KeyRound } from "lucide-react";
+import { Cpu, X, LogIn, UserPlus, User, KeyRound, AlertCircle } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,21 +16,41 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   if (!isOpen) return null;
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) return;
-    login(username);
-    onClose();
+    setErrorMsg("");
+
+    const res = login(username, password);
+    if (!res.success) {
+      setErrorMsg(res.error || "Sign in failed.");
+    } else {
+      setUsername("");
+      setPassword("");
+      onClose();
+    }
   };
 
   const handleSignupSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim()) return;
-    signup(username);
-    onClose();
+    setErrorMsg("");
+
+    const res = signup(username, password);
+    if (!res.success) {
+      setErrorMsg(res.error || "Account registration failed.");
+    } else {
+      setUsername("");
+      setPassword("");
+      onClose();
+    }
+  };
+
+  const switchTab = (newTab: "login" | "signup") => {
+    setTab(newTab);
+    setErrorMsg("");
   };
 
   return (
@@ -54,14 +74,15 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
           </h2>
           <p className="text-xs text-slate-400">
             {tab === "login"
-              ? "Enter your Username & Password to access tactical matches."
-              : "Register your Username & Password to create an account."}
+              ? "Enter your registered Username & Password to sign in."
+              : "Register a new Username & Password to create an account."}
           </p>
         </div>
 
+        {/* Tab Toggle */}
         <div className="grid grid-cols-2 gap-1 bg-[#050814] p-1 rounded-xl border border-cyan-900/60 text-xs font-bold">
           <button
-            onClick={() => setTab("login")}
+            onClick={() => switchTab("login")}
             className={`py-2 rounded-lg flex items-center justify-center space-x-2 transition ${
               tab === "login" ? "bg-cyan-500 text-slate-950 font-black shadow" : "text-slate-400 hover:text-white"
             }`}
@@ -71,7 +92,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
           </button>
 
           <button
-            onClick={() => setTab("signup")}
+            onClick={() => switchTab("signup")}
             className={`py-2 rounded-lg flex items-center justify-center space-x-2 transition ${
               tab === "signup" ? "bg-cyan-500 text-slate-950 font-black shadow" : "text-slate-400 hover:text-white"
             }`}
@@ -81,6 +102,15 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
           </button>
         </div>
 
+        {/* Error Alert Box */}
+        {errorMsg && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-300 text-xs font-bold p-3 rounded-xl flex items-center space-x-2 animate-in fade-in">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Forms */}
         {tab === "login" ? (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
@@ -123,7 +153,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
         ) : (
           <form onSubmit={handleSignupSubmit} className="space-y-4">
             <div>
-              <label className="text-[11px] font-bold text-cyan-300 block mb-1">Username</label>
+              <label className="text-[11px] font-bold text-cyan-300 block mb-1">Choose Username</label>
               <div className="relative">
                 <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                 <input
@@ -138,7 +168,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
             </div>
 
             <div>
-              <label className="text-[11px] font-bold text-cyan-300 block mb-1">Password</label>
+              <label className="text-[11px] font-bold text-cyan-300 block mb-1">Choose Password</label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                 <input
@@ -156,7 +186,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = "login" }: AuthModalPr
               type="submit"
               className="w-full bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-400 hover:to-fuchsia-500 text-slate-950 font-black py-3 rounded-xl text-xs transition shadow-[0_0_20px_rgba(56,189,248,0.3)]"
             >
-              Create Account
+              Create Account & Register
             </button>
           </form>
         )}
