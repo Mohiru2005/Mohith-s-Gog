@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const { action, roomId, hostUsername, joinUsername, player, setupBoard, clientRoom, from, to, username } = body;
 
     const cleanId = (roomId || "").toUpperCase().trim();
-    let room = memoryRooms[cleanId] || clientRoom || null;
+    let room = memoryRooms[cleanId] || null;
 
     if (action === "create") {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -43,23 +43,28 @@ export async function POST(request: Request) {
       }
 
       if (room && clientRoom) {
-        // Merge player setups from client if provided
-        if (clientRoom.player1Board) {
+        // Merge player setup boards (before game starts)
+        if (clientRoom.player1Board && !room.player1Board) {
           room.player1Board = clientRoom.player1Board;
           room.player1Ready = true;
         }
-        if (clientRoom.player2Board) {
+        if (clientRoom.player2Board && !room.player2Board) {
           room.player2Board = clientRoom.player2Board;
           room.player2Ready = true;
         }
-        if (clientRoom.joinUsername) {
+        if (clientRoom.joinUsername && !room.joinUsername) {
           room.joinUsername = clientRoom.joinUsername;
           if (room.status === "waiting_for_player2") room.status = "setup";
+        }
+        // ONLY sync client's gameState if server has NO gameState yet
+        if (clientRoom.gameState && !room.gameState) {
+          room.gameState = clientRoom.gameState;
+          room.status = clientRoom.status || "playing";
         }
       }
 
       // If BOTH setups exist, guarantee transition to playing state
-      if (room && room.player1Board && room.player2Board) {
+      if (room && room.player1Board && room.player2Board && !room.gameState) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
         for (let r = 0; r < 8; r++) {
@@ -69,7 +74,7 @@ export async function POST(request: Request) {
           }
         }
 
-        room.gameState = room.gameState || {
+        room.gameState = {
           board: combinedBoard,
           currentTurn: "player1",
           status: "playing",
@@ -127,17 +132,17 @@ export async function POST(request: Request) {
         room.player2Ready = true;
       }
 
-      if (clientRoom?.player1Board) {
+      if (clientRoom?.player1Board && !room.player1Board) {
         room.player1Board = clientRoom.player1Board;
         room.player1Ready = true;
       }
-      if (clientRoom?.player2Board) {
+      if (clientRoom?.player2Board && !room.player2Board) {
         room.player2Board = clientRoom.player2Board;
         room.player2Ready = true;
       }
 
       // Check if BOTH setups are ready
-      if (room.player1Board && room.player2Board) {
+      if (room.player1Board && room.player2Board && !room.gameState) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
         for (let r = 0; r < 8; r++) {
@@ -164,7 +169,22 @@ export async function POST(request: Request) {
     }
 
     if (action === "move") {
-      if (!room || !room.gameState || room.status === "canceled") {
+      if (!room) {
+        room = clientRoom || {
+          roomId: cleanId,
+          hostUsername: "Host_Commander",
+          player1Ready: true,
+          player2Ready: true,
+          status: "playing",
+          createdAt: Date.now(),
+        };
+      }
+
+      if (clientRoom?.gameState && (!room.gameState || clientRoom.gameState.history.length >= room.gameState.history.length)) {
+        room.gameState = clientRoom.gameState;
+      }
+
+      if (!room.gameState) {
         return NextResponse.json({ error: "Invalid room state" }, { status: 400 });
       }
 

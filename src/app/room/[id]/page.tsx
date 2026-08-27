@@ -36,7 +36,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       const rooms = getOnlineRooms();
       let current = rooms[cleanId];
 
-      // Bi-directional state sync with Vercel Server API
+      // Poll Vercel Server API for multi-device real-time sync
       try {
         const res = await fetch(`/api/rooms`, {
           method: "POST",
@@ -47,29 +47,14 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
         if (res.ok) {
           const serverRoom: OnlineRoom = await res.json();
           if (serverRoom && serverRoom.roomId) {
-            current = { ...current, ...serverRoom };
+            // Give preference to server's gameState if server move history is newer
+            const serverHistoryLength = serverRoom.gameState?.history?.length || 0;
+            const clientHistoryLength = current?.gameState?.history?.length || 0;
 
-            // Merge boards if both setups exist
-            if (current.player1Board && current.player2Board && current.status !== "playing" && current.status !== "canceled") {
-              const combinedBoard = Array(BOARD_ROWS)
-                .fill(null)
-                .map(() => Array(BOARD_COLS).fill(null));
-
-              for (let r = 0; r < BOARD_ROWS; r++) {
-                for (let c = 0; c < BOARD_COLS; c++) {
-                  if (current.player1Board[r][c]) combinedBoard[r][c] = current.player1Board[r][c];
-                  if (current.player2Board[r][c]) combinedBoard[r][c] = current.player2Board[r][c];
-                }
-              }
-
-              current.gameState = {
-                board: combinedBoard,
-                currentTurn: "player1",
-                status: "playing",
-                winner: null,
-                history: [],
-              };
-              current.status = "playing";
+            if (serverHistoryLength >= clientHistoryLength) {
+              current = { ...current, ...serverRoom };
+            } else {
+              current = { ...serverRoom, ...current };
             }
 
             rooms[cleanId] = current;
@@ -89,7 +74,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
     };
 
     fetchRoom();
-    const interval = setInterval(fetchRoom, 600);
+    const interval = setInterval(fetchRoom, 500);
     window.addEventListener("storage", fetchRoom);
 
     return () => {
@@ -117,11 +102,27 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
     if (updated) setRoom({ ...updated });
   };
 
-  const handleMoveExecuted = (newState: any) => {
+  const handleMoveExecuted = async (newState: any) => {
     const lastMove = newState.history[newState.history.length - 1];
     if (lastMove) {
       const updated = executeOnlineMove(roomId, lastMove.from, lastMove.to);
       if (updated) setRoom({ ...updated });
+
+      // Immediate Server API sync for opponent device
+      try {
+        const cleanId = roomId.toUpperCase().trim();
+        await fetch(`/api/rooms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "move",
+            roomId: cleanId,
+            from: lastMove.from,
+            to: lastMove.to,
+            clientRoom: updated,
+          }),
+        });
+      } catch (e) {}
     }
   };
 
