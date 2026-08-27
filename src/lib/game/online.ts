@@ -15,9 +15,11 @@ export interface OnlineRoom {
   createdAt: number;
 }
 
-const ONLINE_ROOMS_STORAGE_KEY = "gog_online_rooms_v1";
+const ONLINE_ROOMS_STORAGE_KEY = "gog_online_rooms_v2";
+const CLOUD_API_BASE = "https://api.restful-api.dev/objects";
 
 let memoryRoomsStore: Record<string, OnlineRoom> = {};
+const cloudIdMapping: Record<string, string> = {};
 
 export function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -29,9 +31,7 @@ export function generateRoomCode(): string {
 }
 
 export function getOnlineRooms(): Record<string, OnlineRoom> {
-  if (typeof window === "undefined") {
-    return memoryRoomsStore;
-  }
+  if (typeof window === "undefined") return memoryRoomsStore;
   try {
     const raw = localStorage.getItem(ONLINE_ROOMS_STORAGE_KEY);
     return raw ? JSON.parse(raw) : memoryRoomsStore;
@@ -49,6 +49,62 @@ export function saveOnlineRooms(rooms: Record<string, OnlineRoom>): void {
   } catch (e) {}
 }
 
+// Sync room state to global cloud REST API so any 2 devices on Earth stay 100% in sync
+async function syncRoomToCloud(room: OnlineRoom): Promise<void> {
+  if (typeof window === "undefined") return;
+  const cleanId = room.roomId.toUpperCase().trim();
+
+  try {
+    const cloudObjId = cloudIdMapping[cleanId];
+    if (cloudObjId) {
+      await fetch(`${CLOUD_API_BASE}/${cloudObjId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cleanId, data: room }),
+      });
+    } else {
+      const res = await fetch(CLOUD_API_BASE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cleanId, data: room }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        if (created?.id) {
+          cloudIdMapping[cleanId] = created.id;
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+// Fetch room state from global cloud REST API
+export async function fetchRoomFromCloud(roomId: string): Promise<OnlineRoom | null> {
+  const cleanId = roomId.toUpperCase().trim();
+  try {
+    const cloudObjId = cloudIdMapping[cleanId];
+    if (cloudObjId) {
+      const res = await fetch(`${CLOUD_API_BASE}/${cloudObjId}`);
+      if (res.ok) {
+        const item = await res.json();
+        if (item?.data?.roomId) return item.data as OnlineRoom;
+      }
+    }
+
+    // Search by room code name
+    const searchRes = await fetch(`${CLOUD_API_BASE}`);
+    if (searchRes.ok) {
+      const items: any[] = await searchRes.json();
+      const match = items.find((it) => it.name === cleanId || it.data?.roomId === cleanId);
+      if (match?.data?.roomId) {
+        cloudIdMapping[cleanId] = match.id;
+        return match.data as OnlineRoom;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 export function createOnlineRoom(hostUsername: string): OnlineRoom {
   const roomId = generateRoomCode();
   const room: OnlineRoom = {
@@ -64,14 +120,7 @@ export function createOnlineRoom(hostUsername: string): OnlineRoom {
   rooms[roomId] = room;
   saveOnlineRooms(rooms);
 
-  if (typeof window !== "undefined") {
-    fetch("/api/rooms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create", hostUsername }),
-    }).catch(() => {});
-  }
-
+  syncRoomToCloud(room);
   return room;
 }
 
@@ -84,30 +133,22 @@ export function joinOnlineRoom(roomId: string, joinUsername: string): OnlineRoom
     room = {
       roomId: cleanId,
       hostUsername: "Host_Commander",
-      joinUsername,
+      joinUsername: joinUsername || "Challenger_Commander",
       player1Ready: false,
       player2Ready: false,
       status: "setup",
       createdAt: Date.now(),
     };
     rooms[cleanId] = room;
-    saveOnlineRooms(rooms);
   } else {
     room.joinUsername = joinUsername || "Challenger_Commander";
     if (room.status === "waiting_for_player2") {
       room.status = "setup";
     }
-    saveOnlineRooms(rooms);
   }
 
-  if (typeof window !== "undefined") {
-    fetch("/api/rooms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "join", roomId: cleanId, joinUsername }),
-    }).catch(() => {});
-  }
-
+  saveOnlineRooms(rooms);
+  syncRoomToCloud(room);
   return room;
 }
 
@@ -129,7 +170,7 @@ export function submitPlayerSetup(
     room.player2Ready = true;
   }
 
-  // Strictly require BOTH players to be ready before combining boards and starting
+  // Combine boards when BOTH setups are ready
   if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
     const combinedBoard = Array(BOARD_ROWS)
       .fill(null)
@@ -153,15 +194,7 @@ export function submitPlayerSetup(
   }
 
   saveOnlineRooms(rooms);
-
-  if (typeof window !== "undefined") {
-    fetch("/api/rooms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "setup", roomId: cleanId, player, setupBoard }),
-    }).catch(() => {});
-  }
-
+  syncRoomToCloud(room);
   return room;
 }
 
@@ -182,15 +215,7 @@ export function executeOnlineMove(
       room.status = "finished";
     }
     saveOnlineRooms(rooms);
-
-    if (typeof window !== "undefined") {
-      fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "move", roomId: cleanId, from, to }),
-      }).catch(() => {});
-    }
-
+    syncRoomToCloud(room);
     return room;
   } catch (e) {
     console.error("Execute online move error:", e);
@@ -213,15 +238,7 @@ export function cancelOnlineRoom(roomId: string, username: string): OnlineRoom |
   }
 
   saveOnlineRooms(rooms);
-
-  if (typeof window !== "undefined") {
-    fetch("/api/rooms", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "cancel", roomId: cleanId, username }),
-    }).catch(() => {});
-  }
-
+  syncRoomToCloud(room);
   return room;
 }
 

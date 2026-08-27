@@ -7,11 +7,12 @@ import {
   OnlineRoom,
   getOnlineRooms,
   saveOnlineRooms,
+  fetchRoomFromCloud,
   submitPlayerSetup,
   executeOnlineMove,
   cancelOnlineRoom,
 } from "@/lib/game/online";
-import { BoardState } from "@/lib/game/constants";
+import { BOARD_COLS, BOARD_ROWS, BoardState } from "@/lib/game/constants";
 import { SetupGrid } from "@/components/game/SetupGrid";
 import { GameBoard } from "@/components/game/GameBoard";
 import { Copy, Check, Users, RefreshCw, ShieldCheck, LogOut, XCircle, Cpu } from "lucide-react";
@@ -36,22 +37,39 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       const rooms = getOnlineRooms();
       let current = rooms[cleanId];
 
-      // Poll Vercel API for cross-device room updates
-      try {
-        const res = await fetch(`/api/rooms`);
-        if (res.ok) {
-          const serverRooms: OnlineRoom[] = await res.json();
-          const serverRoom = serverRooms.find((r) => r.roomId === cleanId);
-          if (serverRoom) {
-            current = serverRoom;
-            rooms[cleanId] = serverRoom;
-            saveOnlineRooms(rooms);
+      // Poll global cloud REST API for cross-device state sync
+      const cloudRoom = await fetchRoomFromCloud(cleanId);
+      if (cloudRoom) {
+        current = { ...current, ...cloudRoom };
+
+        // Merge boards if both players have submitted setup
+        if (current.player1Board && current.player2Board && current.status !== "playing" && current.status !== "canceled") {
+          const combinedBoard = Array(BOARD_ROWS)
+            .fill(null)
+            .map(() => Array(BOARD_COLS).fill(null));
+
+          for (let r = 0; r < BOARD_ROWS; r++) {
+            for (let c = 0; c < BOARD_COLS; c++) {
+              if (current.player1Board[r][c]) combinedBoard[r][c] = current.player1Board[r][c];
+              if (current.player2Board[r][c]) combinedBoard[r][c] = current.player2Board[r][c];
+            }
           }
+
+          current.gameState = {
+            board: combinedBoard,
+            currentTurn: "player1",
+            status: "playing",
+            winner: null,
+            history: [],
+          };
+          current.status = "playing";
         }
-      } catch (e) {}
+
+        rooms[cleanId] = current;
+        saveOnlineRooms(rooms);
+      }
 
       if (current) {
-        // Automatically transition host to setup if player2 joined
         if (current.joinUsername && current.status === "waiting_for_player2") {
           current.status = "setup";
           rooms[cleanId] = current;
@@ -62,7 +80,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
     };
 
     fetchRoom();
-    const interval = setInterval(fetchRoom, 800);
+    const interval = setInterval(fetchRoom, 700);
     window.addEventListener("storage", fetchRoom);
 
     return () => {
