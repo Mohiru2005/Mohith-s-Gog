@@ -36,7 +36,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       const rooms = getOnlineRooms();
       let current = rooms[cleanId];
 
-      // Poll Vercel Server API for multi-device cross-network sync
+      // Poll Vercel API for cross-device room updates
       try {
         const res = await fetch(`/api/rooms`);
         if (res.ok) {
@@ -51,6 +51,12 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       } catch (e) {}
 
       if (current) {
+        // Automatically transition host to setup if player2 joined
+        if (current.joinUsername && current.status === "waiting_for_player2") {
+          current.status = "setup";
+          rooms[cleanId] = current;
+          saveOnlineRooms(rooms);
+        }
         setRoom({ ...current });
       }
     };
@@ -163,7 +169,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Waiting for Player 2 */}
-      {room.status === "waiting_for_player2" && (
+      {room.status === "waiting_for_player2" && !room.joinUsername && (
         <div className="bg-[#090D1F] border border-cyan-500/40 rounded-2xl p-10 text-center space-y-4 max-w-md mx-auto shadow-2xl">
           <Users className="w-12 h-12 text-cyan-400 mx-auto animate-bounce" />
           <h2 className="text-xl font-extrabold text-white">Waiting for Player 2...</h2>
@@ -180,7 +186,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       )}
 
       {/* Setup Phase */}
-      {room.status === "setup" && (
+      {(room.status === "setup" || room.joinUsername) && room.status !== "playing" && room.status !== "canceled" && (
         <div>
           {!isMySetupDone ? (
             <div className="space-y-4">

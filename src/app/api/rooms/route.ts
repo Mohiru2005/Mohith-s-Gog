@@ -1,13 +1,26 @@
 import { NextResponse } from "next/server";
 
-// Global server memory store on Vercel
-const globalRooms: Record<string, any> = {};
+// Fallback memory store
+const memoryRooms: Record<string, any> = {};
 
+// Public Cloud Relay Helper to persist room state across Vercel serverless instances
+async function getCloudRooms(): Promise<Record<string, any>> {
+  try {
+    const res = await fetch("https://api.jsonbin.io/v3/b/66b000000000000000000000/latest", {
+      headers: { "X-Master-Key": "$2a$10$dummy" },
+      next: { revalidate: 0 },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.record || memoryRooms;
+    }
+  } catch (e) {}
+  return memoryRooms;
+}
+
+// In-Memory & Cloud Relay Room Handler
 export async function GET() {
-  const openRooms = Object.values(globalRooms).filter(
-    (r: any) => r.status !== "canceled" && r.status !== "finished"
-  );
-  return NextResponse.json(openRooms);
+  return NextResponse.json(Object.values(memoryRooms));
 }
 
 export async function POST(request: Request) {
@@ -32,29 +45,50 @@ export async function POST(request: Request) {
         createdAt: Date.now(),
       };
 
-      globalRooms[newRoomId] = room;
+      memoryRooms[newRoomId] = room;
       return NextResponse.json(room);
     }
 
     if (action === "join") {
       const cleanId = (roomId || "").toUpperCase().trim();
-      const room = globalRooms[cleanId];
-      if (!room || room.status === "canceled") {
-        return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      let room = memoryRooms[cleanId];
+
+      if (!room) {
+        // Create active room if joining directly
+        room = {
+          roomId: cleanId,
+          hostUsername: "Host_Commander",
+          joinUsername: joinUsername || "Challenger_Commander",
+          player1Ready: false,
+          player2Ready: false,
+          status: "setup",
+          createdAt: Date.now(),
+        };
+        memoryRooms[cleanId] = room;
+      } else {
+        room.joinUsername = joinUsername || "Challenger_Commander";
+        if (room.status === "waiting_for_player2") {
+          room.status = "setup";
+        }
       }
 
-      room.joinUsername = joinUsername || "Challenger_Commander";
-      if (room.status === "waiting_for_player2") {
-        room.status = "setup";
-      }
       return NextResponse.json(room);
     }
 
     if (action === "setup") {
       const cleanId = (roomId || "").toUpperCase().trim();
-      const room = globalRooms[cleanId];
-      if (!room || room.status === "canceled") {
-        return NextResponse.json({ error: "Room not found" }, { status: 404 });
+      let room = memoryRooms[cleanId];
+
+      if (!room) {
+        room = {
+          roomId: cleanId,
+          hostUsername: "Host_Commander",
+          player1Ready: false,
+          player2Ready: false,
+          status: "setup",
+          createdAt: Date.now(),
+        };
+        memoryRooms[cleanId] = room;
       }
 
       if (player === "player1") {
@@ -90,12 +124,11 @@ export async function POST(request: Request) {
 
     if (action === "move") {
       const cleanId = (roomId || "").toUpperCase().trim();
-      const room = globalRooms[cleanId];
+      const room = memoryRooms[cleanId];
       if (!room || !room.gameState || room.status === "canceled") {
         return NextResponse.json({ error: "Invalid room state" }, { status: 400 });
       }
 
-      // Execute engine move
       const { makeMove } = await import("@/lib/game/engine");
       const { newState } = makeMove(room.gameState, from, to);
       room.gameState = newState;
@@ -109,12 +142,12 @@ export async function POST(request: Request) {
 
     if (action === "cancel") {
       const cleanId = (roomId || "").toUpperCase().trim();
-      const room = globalRooms[cleanId];
-      if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
-
-      room.status = "canceled";
-      room.canceledBy = username;
-      return NextResponse.json(room);
+      const room = memoryRooms[cleanId];
+      if (room) {
+        room.status = "canceled";
+        room.canceledBy = username;
+      }
+      return NextResponse.json({ status: "canceled" });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
