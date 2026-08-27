@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { AuthModal } from "@/components/auth/AuthModal";
 import { AdminPanel } from "@/components/admin/AdminPanel";
-import { Swords, Shield, LogIn, UserPlus, ArrowRight, Cpu, Zap, ShieldAlert } from "lucide-react";
+import { Swords, Shield, LogIn, UserPlus, ArrowRight, Cpu, Zap, LogOut, UserCheck } from "lucide-react";
 
 export default function WelcomePage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authTab, setAuthTab] = useState<"login" | "signup">("login");
 
@@ -52,12 +52,23 @@ export default function WelcomePage() {
                   {user.avatar}
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-white">{user.username}</h3>
+                  <div className="flex items-center space-x-2">
+                    <UserCheck className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-base font-extrabold text-white">{user.username}</h3>
+                  </div>
                   <p className="text-xs text-cyan-400 font-bold">
-                    {isAdmin ? "System Administrator" : "Commander Active"}
+                    {isAdmin ? "System Administrator (Superuser)" : "Active Session Logged In"}
                   </p>
                 </div>
               </div>
+
+              <button
+                onClick={logout}
+                className="flex items-center space-x-1 bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 font-bold px-3 py-1.5 rounded-xl text-xs transition"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
