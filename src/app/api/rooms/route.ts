@@ -1,24 +1,7 @@
 import { NextResponse } from "next/server";
 
-// Fallback memory store
 const memoryRooms: Record<string, any> = {};
 
-// Public Cloud Relay Helper to persist room state across Vercel serverless instances
-async function getCloudRooms(): Promise<Record<string, any>> {
-  try {
-    const res = await fetch("https://api.jsonbin.io/v3/b/66b000000000000000000000/latest", {
-      headers: { "X-Master-Key": "$2a$10$dummy" },
-      next: { revalidate: 0 },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.record || memoryRooms;
-    }
-  } catch (e) {}
-  return memoryRooms;
-}
-
-// In-Memory & Cloud Relay Room Handler
 export async function GET() {
   return NextResponse.json(Object.values(memoryRooms));
 }
@@ -54,7 +37,6 @@ export async function POST(request: Request) {
       let room = memoryRooms[cleanId];
 
       if (!room) {
-        // Create active room if joining directly
         room = {
           roomId: cleanId,
           hostUsername: "Host_Commander",
@@ -99,13 +81,23 @@ export async function POST(request: Request) {
         room.player2Ready = true;
       }
 
-      if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
+      // Auto-combine boards and start playing
+      if (room.player1Board || room.player2Board) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
-        for (let r = 0; r < 8; r++) {
-          for (let c = 0; c < 9; c++) {
-            if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
-            if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
+        if (room.player1Board) {
+          for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 9; c++) {
+              if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
+            }
+          }
+        }
+
+        if (room.player2Board) {
+          for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 9; c++) {
+              if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
+            }
           }
         }
 

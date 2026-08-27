@@ -1,4 +1,4 @@
-import { BOARD_COLS, BOARD_ROWS, BoardState } from "./constants";
+import { BOARD_COLS, BOARD_ROWS, BoardState, INITIAL_PIECES_LIST } from "./constants";
 import { GameState, makeMove, Position } from "./engine";
 
 export interface OnlineRoom {
@@ -64,22 +64,12 @@ export function createOnlineRoom(hostUsername: string): OnlineRoom {
   rooms[roomId] = room;
   saveOnlineRooms(rooms);
 
-  // Sync to Vercel Server API asynchronously for multi-device connection
   if (typeof window !== "undefined") {
     fetch("/api/rooms", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "create", hostUsername }),
-    })
-      .then((res) => res.json())
-      .then((serverRoom) => {
-        if (serverRoom?.roomId) {
-          const currentRooms = getOnlineRooms();
-          currentRooms[serverRoom.roomId] = serverRoom;
-          saveOnlineRooms(currentRooms);
-        }
-      })
-      .catch(() => {});
+    }).catch(() => {});
   }
 
   return room;
@@ -91,7 +81,6 @@ export function joinOnlineRoom(roomId: string, joinUsername: string): OnlineRoom
   let room = rooms[cleanId];
 
   if (!room) {
-    // Create local stub while server syncs
     room = {
       roomId: cleanId,
       hostUsername: "Host_Commander",
@@ -111,7 +100,6 @@ export function joinOnlineRoom(roomId: string, joinUsername: string): OnlineRoom
     saveOnlineRooms(rooms);
   }
 
-  // Sync to Vercel Server API
   if (typeof window !== "undefined") {
     fetch("/api/rooms", {
       method: "POST",
@@ -141,31 +129,43 @@ export function submitPlayerSetup(
     room.player2Ready = true;
   }
 
-  if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
+  // Combine boards whenever both setups exist OR if forcing match launch
+  if (room.player1Ready || room.player2Ready) {
     const combinedBoard = Array(BOARD_ROWS)
       .fill(null)
       .map(() => Array(BOARD_COLS).fill(null));
 
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      for (let c = 0; c < BOARD_COLS; c++) {
-        if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
-        if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
+    if (room.player1Board) {
+      for (let r = 0; r < BOARD_ROWS; r++) {
+        for (let c = 0; c < BOARD_COLS; c++) {
+          if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
+        }
       }
     }
 
-    room.gameState = {
-      board: combinedBoard,
-      currentTurn: "player1",
-      status: "playing",
-      winner: null,
-      history: [],
-    };
-    room.status = "playing";
+    if (room.player2Board) {
+      for (let r = 0; r < BOARD_ROWS; r++) {
+        for (let c = 0; c < BOARD_COLS; c++) {
+          if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
+        }
+      }
+    }
+
+    // Launch playing state when both ready
+    if (room.player1Ready && room.player2Ready) {
+      room.gameState = {
+        board: combinedBoard,
+        currentTurn: "player1",
+        status: "playing",
+        winner: null,
+        history: [],
+      };
+      room.status = "playing";
+    }
   }
 
   saveOnlineRooms(rooms);
 
-  // Sync to Vercel Server API
   if (typeof window !== "undefined") {
     fetch("/api/rooms", {
       method: "POST",
@@ -195,7 +195,6 @@ export function executeOnlineMove(
     }
     saveOnlineRooms(rooms);
 
-    // Sync to Vercel Server API
     if (typeof window !== "undefined") {
       fetch("/api/rooms", {
         method: "POST",
