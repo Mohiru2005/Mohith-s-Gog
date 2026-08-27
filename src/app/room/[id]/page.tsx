@@ -6,6 +6,7 @@ import { usePlayerSession } from "@/lib/game/player-session";
 import {
   OnlineRoom,
   getOnlineRooms,
+  saveOnlineRooms,
   submitPlayerSetup,
   executeOnlineMove,
   cancelOnlineRoom,
@@ -30,9 +31,25 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
   const myPlayer: "player1" | "player2" = isHost ? "player1" : "player2";
 
   useEffect(() => {
-    const fetchRoom = () => {
+    const fetchRoom = async () => {
+      const cleanId = roomId.toUpperCase().trim();
       const rooms = getOnlineRooms();
-      const current = rooms[roomId.toUpperCase()];
+      let current = rooms[cleanId];
+
+      // Poll Vercel Server API for multi-device cross-network sync
+      try {
+        const res = await fetch(`/api/rooms`);
+        if (res.ok) {
+          const serverRooms: OnlineRoom[] = await res.json();
+          const serverRoom = serverRooms.find((r) => r.roomId === cleanId);
+          if (serverRoom) {
+            current = serverRoom;
+            rooms[cleanId] = serverRoom;
+            saveOnlineRooms(rooms);
+          }
+        }
+      } catch (e) {}
+
       if (current) {
         setRoom({ ...current });
       }
@@ -151,7 +168,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
           <Users className="w-12 h-12 text-cyan-400 mx-auto animate-bounce" />
           <h2 className="text-xl font-extrabold text-white">Waiting for Player 2...</h2>
           <p className="text-xs text-slate-400">
-            Share Room Code <strong className="font-mono text-cyan-300 text-sm">{room.roomId}</strong> with your friend so they can join!
+            Share Room Code <strong className="font-mono text-cyan-300 text-sm">{room.roomId}</strong> with your friend so they can join on another device!
           </p>
           <button
             onClick={handleCancelMatch}
