@@ -17,6 +17,9 @@ export interface OnlineRoom {
 
 const ONLINE_ROOMS_STORAGE_KEY = "gog_online_rooms_v1";
 
+// Memory fallback for Node environments or SSR
+let memoryRoomsStore: Record<string, OnlineRoom> = {};
+
 export function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -27,16 +30,19 @@ export function generateRoomCode(): string {
 }
 
 export function getOnlineRooms(): Record<string, OnlineRoom> {
-  if (typeof window === "undefined") return {};
+  if (typeof window === "undefined") {
+    return memoryRoomsStore;
+  }
   try {
     const raw = localStorage.getItem(ONLINE_ROOMS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    return raw ? JSON.parse(raw) : memoryRoomsStore;
   } catch (e) {
-    return {};
+    return memoryRoomsStore;
   }
 }
 
 export function saveOnlineRooms(rooms: Record<string, OnlineRoom>): void {
+  memoryRoomsStore = { ...rooms };
   if (typeof window === "undefined") return;
   localStorage.setItem(ONLINE_ROOMS_STORAGE_KEY, JSON.stringify(rooms));
   try {
