@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, use } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerSession } from "@/lib/game/player-session";
 import {
@@ -14,6 +14,7 @@ import {
 import { BOARD_COLS, BOARD_ROWS, BoardState } from "@/lib/game/constants";
 import { SetupGrid } from "@/components/game/SetupGrid";
 import { GameBoard } from "@/components/game/GameBoard";
+import { P2PManager } from "@/lib/game/p2p";
 import { Copy, Check, Users, RefreshCw, ShieldCheck, LogOut, XCircle, Cpu } from "lucide-react";
 
 export default function OnlineRoomPage({ params }: { params: Promise<{ id: string }> }) {
@@ -26,17 +27,33 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
   const [room, setRoom] = useState<OnlineRoom | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const p2pRef = useRef<P2PManager | null>(null);
+
   const currentUsername = name || "Commander";
   const isHost = currentUsername === room?.hostUsername;
   const myPlayer: "player1" | "player2" = isHost ? "player1" : "player2";
 
   useEffect(() => {
-    const fetchRoom = async () => {
-      const cleanId = roomId.toUpperCase().trim();
-      const rooms = getOnlineRooms();
-      let current = rooms[cleanId];
+    const cleanId = roomId.toUpperCase().trim();
+    const rooms = getOnlineRooms();
+    let current = rooms[cleanId];
 
-      // Poll Vercel Server API for multi-device real-time sync
+    if (current) {
+      setRoom({ ...current });
+
+      // Initialize WebRTC P2P Manager
+      const manager = new P2PManager(cleanId, currentUsername === current.hostUsername, (updatedRoom) => {
+        setRoom({ ...updatedRoom });
+        rooms[cleanId] = updatedRoom;
+        saveOnlineRooms(rooms);
+      });
+
+      manager.init(current);
+      p2pRef.current = manager;
+    }
+
+    const fetchRoom = async () => {
+      // Bi-directional state sync backup
       try {
         const res = await fetch(`/api/rooms`, {
           method: "POST",
@@ -47,7 +64,6 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
         if (res.ok) {
           const serverRoom: OnlineRoom = await res.json();
           if (serverRoom && serverRoom.roomId) {
-            // Give preference to server's gameState if server move history is newer
             const serverHistoryLength = serverRoom.gameState?.history?.length || 0;
             const clientHistoryLength = current?.gameState?.history?.length || 0;
 
@@ -59,18 +75,10 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
 
             rooms[cleanId] = current;
             saveOnlineRooms(rooms);
+            setRoom({ ...current });
           }
         }
       } catch (e) {}
-
-      if (current) {
-        if (current.joinUsername && current.status === "waiting_for_player2") {
-          current.status = "setup";
-          rooms[cleanId] = current;
-          saveOnlineRooms(rooms);
-        }
-        setRoom({ ...current });
-      }
     };
 
     fetchRoom();
@@ -80,8 +88,9 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
     return () => {
       clearInterval(interval);
       window.removeEventListener("storage", fetchRoom);
+      p2pRef.current?.destroy();
     };
-  }, [roomId]);
+  }, [roomId, currentUsername]);
 
   const handleCopyCode = () => {
     if (!room) return;
@@ -92,12 +101,14 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
 
   const handleCancelMatch = () => {
     if (!room) return;
+    p2pRef.current?.sendMessage({ type: "MATCH_CANCELED", username: currentUsername });
     const updated = cancelOnlineRoom(roomId, currentUsername);
     if (updated) setRoom({ ...updated });
     router.push("/");
   };
 
   const handleSetupComplete = (board: BoardState) => {
+    p2pRef.current?.sendMessage({ type: "SETUP_SUBMITTED", player: myPlayer, setupBoard: board });
     const updated = submitPlayerSetup(roomId, myPlayer, board);
     if (updated) setRoom({ ...updated });
   };
@@ -105,10 +116,10 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
   const handleMoveExecuted = async (newState: any) => {
     const lastMove = newState.history[newState.history.length - 1];
     if (lastMove) {
+      p2pRef.current?.sendMessage({ type: "MOVE_EXECUTED", from: lastMove.from, to: lastMove.to });
       const updated = executeOnlineMove(roomId, lastMove.from, lastMove.to);
       if (updated) setRoom({ ...updated });
 
-      // Immediate Server API sync for opponent device
       try {
         const cleanId = roomId.toUpperCase().trim();
         await fetch(`/api/rooms`, {
