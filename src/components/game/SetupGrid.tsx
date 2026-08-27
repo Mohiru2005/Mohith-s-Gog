@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { BOARD_COLS, BOARD_ROWS, BoardState, INITIAL_PIECES_LIST, PieceRank } from "@/lib/game/constants";
 import { PieceTile } from "./PieceTile";
 import { ArsenalManager } from "./ArsenalManager";
-import { Shuffle, CheckCircle, Cpu } from "lucide-react";
+import { Shuffle, CheckCircle, Zap } from "lucide-react";
 
 interface SetupGridProps {
   player: "player1" | "player2";
@@ -54,13 +54,19 @@ export function SetupGrid({ player, onSetupComplete }: SetupGridProps) {
     if (!allowedRows.includes(r)) return;
 
     const currentPiece = board[r][c];
+    let targetIndex = selectedUnplacedIndex;
 
-    if (selectedUnplacedIndex !== null && unplaced[selectedUnplacedIndex]) {
-      const rankToPlace = unplaced[selectedUnplacedIndex];
+    // Fallback: If no unplaced piece was explicitly selected, auto-use the first available unplaced piece
+    if (targetIndex === null && !currentPiece && unplaced.length > 0) {
+      targetIndex = 0;
+    }
+
+    if (targetIndex !== null && unplaced[targetIndex]) {
+      const rankToPlace = unplaced[targetIndex];
       const newBoard = board.map((row) => [...row]);
 
       const newUnplaced = [...unplaced];
-      newUnplaced.splice(selectedUnplacedIndex, 1);
+      newUnplaced.splice(targetIndex, 1);
       if (currentPiece) {
         newUnplaced.push(currentPiece.rank);
       }
@@ -94,21 +100,21 @@ export function SetupGrid({ player, onSetupComplete }: SetupGridProps) {
       />
 
       {/* Main Setup Controls */}
-      <div className="w-full flex items-center justify-between bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-4 shadow-lg">
+      <div className="w-full flex flex-wrap items-center justify-between bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-4 shadow-lg gap-4">
         <div>
           <h2 className="text-lg font-black text-cyan-300">Quantum Army Placement</h2>
           <p className="text-xs text-slate-400">
-            Deploy your 21 military units manually, select an Arsenal grid, or auto-deploy.
+            Click any green grid cell to place units, or click <strong className="text-cyan-300">Auto Deploy</strong> for 1-click instant setup!
           </p>
         </div>
 
         <div className="flex space-x-3">
           <button
             onClick={handleRandomize}
-            className="flex items-center space-x-2 bg-[#050814] hover:bg-slate-900 text-cyan-300 border border-cyan-500/30 font-bold px-4 py-2 rounded-xl text-xs transition"
+            className="flex items-center space-x-2 bg-gradient-to-r from-cyan-500/20 to-fuchsia-500/20 hover:from-cyan-500/30 hover:to-fuchsia-500/30 text-cyan-300 border border-cyan-400/50 font-bold px-4 py-2 rounded-xl text-xs transition shadow-lg"
           >
-            <Shuffle className="w-4 h-4" />
-            <span>Auto Deploy</span>
+            <Shuffle className="w-4 h-4 text-cyan-300" />
+            <span>Auto Deploy (1-Click Setup)</span>
           </button>
 
           <button
@@ -116,7 +122,7 @@ export function SetupGrid({ player, onSetupComplete }: SetupGridProps) {
             onClick={() => onSetupComplete(board)}
             className={`flex items-center space-x-2 font-bold px-6 py-2 rounded-xl text-xs transition shadow-lg ${
               isReady
-                ? "bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-400 hover:to-fuchsia-500 text-slate-950 cursor-pointer font-black"
+                ? "bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-400 hover:to-fuchsia-500 text-slate-950 cursor-pointer font-black scale-105"
                 : "bg-slate-900 text-slate-600 cursor-not-allowed border border-slate-800"
             }`}
           >
@@ -159,9 +165,12 @@ export function SetupGrid({ player, onSetupComplete }: SetupGridProps) {
       {/* Unplaced Reserve Dock */}
       {unplaced.length > 0 && (
         <div className="w-full bg-[#090D1F] border border-cyan-500/30 rounded-2xl p-4 shadow-lg">
-          <h3 className="text-xs font-bold uppercase text-cyan-400 mb-3 tracking-wider">
-            Unplaced Unit Reserve ({unplaced.length} Remaining)
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-bold uppercase text-cyan-400 tracking-wider">
+              Unplaced Unit Reserve ({unplaced.length} Remaining)
+            </h3>
+            <span className="text-[10px] text-slate-400">Click any unit to select, or click empty grid squares directly</span>
+          </div>
           <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1">
             {unplaced.map((rank, idx) => (
               <button
