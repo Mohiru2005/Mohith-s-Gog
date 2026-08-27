@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
 
-// Import global memory store reference from route.ts
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: corsHeaders,
+  });
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -8,15 +20,16 @@ export async function GET(
   const resolvedParams = await params;
   const roomId = (resolvedParams.id || "").toUpperCase().trim();
 
-  // Fetch room state from Vercel Server API
-  const roomsRes = await fetch(new URL("/api/rooms", request.url));
-  const rooms = await roomsRes.json();
-  
-  const room = rooms.find((r: any) => r.roomId === roomId);
+  try {
+    const roomsRes = await fetch(new URL("/api/rooms", request.url));
+    if (roomsRes.ok) {
+      const rooms = await roomsRes.json();
+      const room = rooms.find((r: any) => r.roomId === roomId);
+      if (room) {
+        return NextResponse.json(room, { headers: corsHeaders });
+      }
+    }
+  } catch (e) {}
 
-  if (!room) {
-    return NextResponse.json({ error: "Room not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(room);
+  return NextResponse.json({ error: "Room not found" }, { status: 404, headers: corsHeaders });
 }

@@ -3,8 +3,21 @@ import { NextResponse } from "next/server";
 // Serverless process memory store
 const memoryRooms: Record<string, any> = {};
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: corsHeaders,
+  });
+}
+
 export async function GET() {
-  return NextResponse.json(Object.values(memoryRooms));
+  return NextResponse.json(Object.values(memoryRooms), { headers: corsHeaders });
 }
 
 export async function POST(request: Request) {
@@ -33,7 +46,7 @@ export async function POST(request: Request) {
       };
 
       memoryRooms[newRoomId] = room;
-      return NextResponse.json(room);
+      return NextResponse.json(room, { headers: corsHeaders });
     }
 
     if (action === "sync") {
@@ -43,7 +56,6 @@ export async function POST(request: Request) {
       }
 
       if (room && clientRoom) {
-        // Merge player setup boards (before game starts)
         if (clientRoom.player1Board && !room.player1Board) {
           room.player1Board = clientRoom.player1Board;
           room.player1Ready = true;
@@ -56,14 +68,12 @@ export async function POST(request: Request) {
           room.joinUsername = clientRoom.joinUsername;
           if (room.status === "waiting_for_player2") room.status = "setup";
         }
-        // ONLY sync client's gameState if server has NO gameState yet
         if (clientRoom.gameState && !room.gameState) {
           room.gameState = clientRoom.gameState;
           room.status = clientRoom.status || "playing";
         }
       }
 
-      // If BOTH setups exist, guarantee transition to playing state
       if (room && room.player1Board && room.player2Board && !room.gameState) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
@@ -87,7 +97,7 @@ export async function POST(request: Request) {
       }
 
       if (room) memoryRooms[cleanId] = room;
-      return NextResponse.json(room || { error: "Not found" });
+      return NextResponse.json(room || { error: "Not found" }, { headers: corsHeaders });
     }
 
     if (action === "join") {
@@ -109,7 +119,7 @@ export async function POST(request: Request) {
       }
 
       memoryRooms[cleanId] = room;
-      return NextResponse.json(room);
+      return NextResponse.json(room, { headers: corsHeaders });
     }
 
     if (action === "setup") {
@@ -141,7 +151,6 @@ export async function POST(request: Request) {
         room.player2Ready = true;
       }
 
-      // Check if BOTH setups are ready
       if (room.player1Board && room.player2Board && !room.gameState) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
@@ -165,7 +174,7 @@ export async function POST(request: Request) {
       }
 
       memoryRooms[cleanId] = room;
-      return NextResponse.json(room);
+      return NextResponse.json(room, { headers: corsHeaders });
     }
 
     if (action === "move") {
@@ -185,7 +194,7 @@ export async function POST(request: Request) {
       }
 
       if (!room.gameState) {
-        return NextResponse.json({ error: "Invalid room state" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid room state" }, { status: 400, headers: corsHeaders });
       }
 
       const { makeMove } = await import("@/lib/game/engine");
@@ -197,7 +206,7 @@ export async function POST(request: Request) {
       }
 
       memoryRooms[cleanId] = room;
-      return NextResponse.json(room);
+      return NextResponse.json(room, { headers: corsHeaders });
     }
 
     if (action === "cancel") {
@@ -206,11 +215,11 @@ export async function POST(request: Request) {
         room.canceledBy = username;
         memoryRooms[cleanId] = room;
       }
-      return NextResponse.json({ status: "canceled" });
+      return NextResponse.json({ status: "canceled" }, { headers: corsHeaders });
     }
 
-    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    return NextResponse.json({ error: "Unknown action" }, { status: 400, headers: corsHeaders });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message }, { status: 500, headers: corsHeaders });
   }
 }
