@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+// Serverless process memory store
 const memoryRooms: Record<string, any> = {};
 
 export async function GET() {
@@ -9,7 +10,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, roomId, hostUsername, joinUsername, player, setupBoard, from, to, username } = body;
+    const { action, roomId, hostUsername, joinUsername, player, setupBoard, clientRoom, from, to, username } = body;
+
+    const cleanId = (roomId || "").toUpperCase().trim();
+    let room = memoryRooms[cleanId] || clientRoom || null;
 
     if (action === "create") {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -19,7 +23,7 @@ export async function POST(request: Request) {
       }
       const newRoomId = `GOG-${code}`;
 
-      const room = {
+      room = {
         roomId: newRoomId,
         hostUsername: hostUsername || "Host_Commander",
         player1Ready: false,
@@ -32,10 +36,56 @@ export async function POST(request: Request) {
       return NextResponse.json(room);
     }
 
-    if (action === "join") {
-      const cleanId = (roomId || "").toUpperCase().trim();
-      let room = memoryRooms[cleanId];
+    if (action === "sync") {
+      if (!room && clientRoom?.roomId) {
+        room = clientRoom;
+        memoryRooms[cleanId] = clientRoom;
+      }
 
+      if (room && clientRoom) {
+        // Merge player setups from client if provided
+        if (clientRoom.player1Board) {
+          room.player1Board = clientRoom.player1Board;
+          room.player1Ready = true;
+        }
+        if (clientRoom.player2Board) {
+          room.player2Board = clientRoom.player2Board;
+          room.player2Ready = true;
+        }
+        if (clientRoom.joinUsername) {
+          room.joinUsername = clientRoom.joinUsername;
+          if (room.status === "waiting_for_player2") room.status = "setup";
+        }
+      }
+
+      // If BOTH setups exist, guarantee transition to playing state
+      if (room && room.player1Board && room.player2Board) {
+        const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
+
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 9; c++) {
+            if (room.player1Board[r][c]) combinedBoard[r][c] = room.player1Board[r][c];
+            if (room.player2Board[r][c]) combinedBoard[r][c] = room.player2Board[r][c];
+          }
+        }
+
+        room.gameState = room.gameState || {
+          board: combinedBoard,
+          currentTurn: "player1",
+          status: "playing",
+          winner: null,
+          history: [],
+        };
+        room.status = "playing";
+        room.player1Ready = true;
+        room.player2Ready = true;
+      }
+
+      if (room) memoryRooms[cleanId] = room;
+      return NextResponse.json(room || { error: "Not found" });
+    }
+
+    if (action === "join") {
       if (!room) {
         room = {
           roomId: cleanId,
@@ -46,7 +96,6 @@ export async function POST(request: Request) {
           status: "setup",
           createdAt: Date.now(),
         };
-        memoryRooms[cleanId] = room;
       } else {
         room.joinUsername = joinUsername || "Challenger_Commander";
         if (room.status === "waiting_for_player2") {
@@ -54,13 +103,11 @@ export async function POST(request: Request) {
         }
       }
 
+      memoryRooms[cleanId] = room;
       return NextResponse.json(room);
     }
 
     if (action === "setup") {
-      const cleanId = (roomId || "").toUpperCase().trim();
-      let room = memoryRooms[cleanId];
-
       if (!room) {
         room = {
           roomId: cleanId,
@@ -70,7 +117,6 @@ export async function POST(request: Request) {
           status: "setup",
           createdAt: Date.now(),
         };
-        memoryRooms[cleanId] = room;
       }
 
       if (player === "player1") {
@@ -81,8 +127,17 @@ export async function POST(request: Request) {
         room.player2Ready = true;
       }
 
-      // Strictly require BOTH players to be ready before combining boards and launching match
-      if (room.player1Ready && room.player2Ready && room.player1Board && room.player2Board) {
+      if (clientRoom?.player1Board) {
+        room.player1Board = clientRoom.player1Board;
+        room.player1Ready = true;
+      }
+      if (clientRoom?.player2Board) {
+        room.player2Board = clientRoom.player2Board;
+        room.player2Ready = true;
+      }
+
+      // Check if BOTH setups are ready
+      if (room.player1Board && room.player2Board) {
         const combinedBoard = Array(8).fill(null).map(() => Array(9).fill(null));
 
         for (let r = 0; r < 8; r++) {
@@ -100,14 +155,15 @@ export async function POST(request: Request) {
           history: [],
         };
         room.status = "playing";
+        room.player1Ready = true;
+        room.player2Ready = true;
       }
 
+      memoryRooms[cleanId] = room;
       return NextResponse.json(room);
     }
 
     if (action === "move") {
-      const cleanId = (roomId || "").toUpperCase().trim();
-      const room = memoryRooms[cleanId];
       if (!room || !room.gameState || room.status === "canceled") {
         return NextResponse.json({ error: "Invalid room state" }, { status: 400 });
       }
@@ -120,15 +176,15 @@ export async function POST(request: Request) {
         room.status = "finished";
       }
 
+      memoryRooms[cleanId] = room;
       return NextResponse.json(room);
     }
 
     if (action === "cancel") {
-      const cleanId = (roomId || "").toUpperCase().trim();
-      const room = memoryRooms[cleanId];
       if (room) {
         room.status = "canceled";
         room.canceledBy = username;
+        memoryRooms[cleanId] = room;
       }
       return NextResponse.json({ status: "canceled" });
     }

@@ -7,7 +7,6 @@ import {
   OnlineRoom,
   getOnlineRooms,
   saveOnlineRooms,
-  fetchRoomFromCloud,
   submitPlayerSetup,
   executeOnlineMove,
   cancelOnlineRoom,
@@ -37,37 +36,47 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
       const rooms = getOnlineRooms();
       let current = rooms[cleanId];
 
-      // Poll global cloud REST API for cross-device state sync
-      const cloudRoom = await fetchRoomFromCloud(cleanId);
-      if (cloudRoom) {
-        current = { ...current, ...cloudRoom };
+      // Bi-directional state sync with Vercel Server API
+      try {
+        const res = await fetch(`/api/rooms`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "sync", roomId: cleanId, clientRoom: current }),
+        });
 
-        // Merge boards if both players have submitted setup
-        if (current.player1Board && current.player2Board && current.status !== "playing" && current.status !== "canceled") {
-          const combinedBoard = Array(BOARD_ROWS)
-            .fill(null)
-            .map(() => Array(BOARD_COLS).fill(null));
+        if (res.ok) {
+          const serverRoom: OnlineRoom = await res.json();
+          if (serverRoom && serverRoom.roomId) {
+            current = { ...current, ...serverRoom };
 
-          for (let r = 0; r < BOARD_ROWS; r++) {
-            for (let c = 0; c < BOARD_COLS; c++) {
-              if (current.player1Board[r][c]) combinedBoard[r][c] = current.player1Board[r][c];
-              if (current.player2Board[r][c]) combinedBoard[r][c] = current.player2Board[r][c];
+            // Merge boards if both setups exist
+            if (current.player1Board && current.player2Board && current.status !== "playing" && current.status !== "canceled") {
+              const combinedBoard = Array(BOARD_ROWS)
+                .fill(null)
+                .map(() => Array(BOARD_COLS).fill(null));
+
+              for (let r = 0; r < BOARD_ROWS; r++) {
+                for (let c = 0; c < BOARD_COLS; c++) {
+                  if (current.player1Board[r][c]) combinedBoard[r][c] = current.player1Board[r][c];
+                  if (current.player2Board[r][c]) combinedBoard[r][c] = current.player2Board[r][c];
+                }
+              }
+
+              current.gameState = {
+                board: combinedBoard,
+                currentTurn: "player1",
+                status: "playing",
+                winner: null,
+                history: [],
+              };
+              current.status = "playing";
             }
+
+            rooms[cleanId] = current;
+            saveOnlineRooms(rooms);
           }
-
-          current.gameState = {
-            board: combinedBoard,
-            currentTurn: "player1",
-            status: "playing",
-            winner: null,
-            history: [],
-          };
-          current.status = "playing";
         }
-
-        rooms[cleanId] = current;
-        saveOnlineRooms(rooms);
-      }
+      } catch (e) {}
 
       if (current) {
         if (current.joinUsername && current.status === "waiting_for_player2") {
@@ -80,7 +89,7 @@ export default function OnlineRoomPage({ params }: { params: Promise<{ id: strin
     };
 
     fetchRoom();
-    const interval = setInterval(fetchRoom, 700);
+    const interval = setInterval(fetchRoom, 600);
     window.addEventListener("storage", fetchRoom);
 
     return () => {
