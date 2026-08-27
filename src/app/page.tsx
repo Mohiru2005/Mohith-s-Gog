@@ -1,153 +1,202 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
-import { useAuth } from "@/lib/auth-context";
-import { AuthModal } from "@/components/auth/AuthModal";
-import { AdminPanel } from "@/components/admin/AdminPanel";
-import { Swords, Shield, LogIn, UserPlus, ArrowRight, Cpu, Zap, LogOut, UserCheck } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { usePlayerSession } from "@/lib/game/player-session";
+import { createOnlineRoom, joinOnlineRoom, getOnlineRooms, OnlineRoom } from "@/lib/game/online";
+import { Swords, Plus, LogIn, Users, Cpu, User } from "lucide-react";
 
-export default function WelcomePage() {
-  const { user, logout } = useAuth();
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authTab, setAuthTab] = useState<"login" | "signup">("login");
+export default function HomeLobbyPage() {
+  const router = useRouter();
+  const { name, saveName } = usePlayerSession();
 
-  const openAuth = (tab: "login" | "signup") => {
-    setAuthTab(tab);
-    setIsAuthOpen(true);
+  const [inputName, setInputName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [activeRooms, setActiveRooms] = useState<OnlineRoom[]>([]);
+
+  useEffect(() => {
+    if (name) setInputName(name);
+  }, [name]);
+
+  useEffect(() => {
+    const update = () => {
+      const rooms = getOnlineRooms();
+      const openRooms = Object.values(rooms).filter(
+        (r) => r.status !== "canceled" && r.status !== "finished"
+      );
+      setActiveRooms(openRooms);
+    };
+    update();
+    window.addEventListener("storage", update);
+    return () => window.removeEventListener("storage", update);
+  }, []);
+
+  const handleNameSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (inputName.trim()) {
+      saveName(inputName);
+    }
   };
 
-  const isAdmin = user?.username.toLowerCase() === "admin";
+  const handleCreateRoom = () => {
+    const playerName = inputName.trim() || "Commander";
+    saveName(playerName);
+
+    const room = createOnlineRoom(playerName);
+    router.push(`/room/${room.roomId}`);
+  };
+
+  const handleJoinRoom = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!joinCode.trim()) return;
+
+    const playerName = inputName.trim() || "Commander";
+    saveName(playerName);
+
+    const room = joinOnlineRoom(joinCode, playerName);
+    if (!room) {
+      setErrorMsg("Invalid room code. Please check the code and try again.");
+      return;
+    }
+
+    router.push(`/room/${room.roomId}`);
+  };
 
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center space-y-10 py-6 select-none">
-      {/* Quantum Cyber Hero Card */}
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl bg-[#090D1F]/90 border border-cyan-500/40 p-8 md:p-14 shadow-[0_0_50px_rgba(56,189,248,0.15)] text-center space-y-6">
-        {/* Ambient Glowing Neon Orbs */}
-        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-32 right-10 w-80 h-80 bg-fuchsia-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="inline-flex items-center space-x-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold px-4 py-1.5 rounded-full shadow-[0_0_15px_rgba(56,189,248,0.2)]">
+    <div className="max-w-4xl mx-auto space-y-8 py-4 select-none">
+      {/* Title Card */}
+      <div className="bg-[#090D1F]/90 border border-cyan-500/40 rounded-3xl p-8 text-center space-y-4 shadow-[0_0_40px_rgba(56,189,248,0.15)]">
+        <div className="inline-flex items-center space-x-2 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold px-4 py-1.5 rounded-full">
           <Cpu className="w-4 h-4 text-cyan-400" />
-          <span>QUANTUM CYBER STRATEGY MATRIX v3.0</span>
+          <span>INSTANT MULTIPLAYER LOBBY</span>
         </div>
 
-        {/* Brand Title */}
-        <div className="space-y-2">
-          <h1 className="text-4xl md:text-6xl font-display font-black tracking-wider">
-            <span className="bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent">MOHIRU'S</span>{" "}
-            <span className="text-white">GOG</span>
-          </h1>
-          <p className="text-slate-300 text-sm md:text-lg max-w-2xl mx-auto leading-relaxed pt-2">
-            The next-generation Games of the Generals strategy engine — deploy 21 tactical pieces, outsmart rival commanders, and dominate remote cyber matches.
-          </p>
-        </div>
+        <h1 className="text-3xl md:text-5xl font-black tracking-wider">
+          <span className="bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 bg-clip-text text-transparent">MOHIRU'S</span>{" "}
+          <span className="text-white">GOG</span>
+        </h1>
+        <p className="text-xs md:text-sm text-slate-400 max-w-xl mx-auto">
+          Enter your name, create a room, share the 4-digit Room Code with a friend on another device, and play!
+        </p>
 
-        {/* Authenticated User Status vs Login/Signup Portal */}
-        {user ? (
-          <div className="bg-[#050814] border border-cyan-500/40 rounded-2xl p-6 max-w-lg mx-auto space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-cyan-900/60 pb-3">
-              <div className="flex items-center space-x-3 text-left">
-                <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-xl text-cyan-300">
-                  {user.avatar}
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <UserCheck className="w-4 h-4 text-emerald-400" />
-                    <h3 className="text-base font-extrabold text-white">{user.username}</h3>
-                  </div>
-                  <p className="text-xs text-cyan-400 font-bold">
-                    {isAdmin ? "System Administrator (Superuser)" : "Active Session Logged In"}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={logout}
-                className="flex items-center space-x-1 bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 font-bold px-3 py-1.5 rounded-xl text-xs transition"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Sign Out</span>
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <Link
-                href="/online"
-                className="flex items-center space-x-2 bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-400 hover:to-fuchsia-500 text-slate-950 font-black text-sm px-6 py-3 rounded-xl shadow-[0_0_20px_rgba(56,189,248,0.4)] transition transform hover:scale-105"
-              >
-                <Swords className="w-4 h-4" />
-                <span>Enter Cyber Match</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-
-              <Link
-                href="/setup"
-                className="flex items-center space-x-2 bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-white font-bold text-sm px-5 py-3 rounded-xl transition"
-              >
-                <Shield className="w-4 h-4 text-emerald-400" />
-                <span>Arsenal Grid</span>
-              </Link>
-            </div>
+        {/* Enter Player Name */}
+        <form onSubmit={handleNameSave} className="max-w-md mx-auto flex items-center space-x-2 pt-2">
+          <div className="relative flex-1">
+            <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+            <input
+              type="text"
+              placeholder="Enter Your Name..."
+              value={inputName}
+              onChange={(e) => {
+                setInputName(e.target.value);
+                saveName(e.target.value);
+              }}
+              className="w-full bg-[#050814] border border-cyan-900/60 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-bold"
+            />
           </div>
-        ) : (
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-4 max-w-md mx-auto">
+        </form>
+      </div>
+
+      {/* Action Cards: Host or Join Room */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Host Room Card */}
+        <div className="bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-4 flex flex-col justify-between hover:border-cyan-400 transition">
+          <div className="space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+              <Plus className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold text-white">Create Game Room</h2>
+            <p className="text-xs text-slate-400">
+              Host a 2-player match as Player 1 (Cyan). Share your 4-digit Room Code with your friend.
+            </p>
+          </div>
+
+          <button
+            onClick={handleCreateRoom}
+            className="w-full bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-400 hover:to-fuchsia-500 text-slate-950 font-black py-3.5 rounded-xl text-xs transition shadow-[0_0_20px_rgba(56,189,248,0.3)] flex items-center justify-center space-x-2"
+          >
+            <Swords className="w-4 h-4" />
+            <span>Create Room</span>
+          </button>
+        </div>
+
+        {/* Join Room Card */}
+        <div className="bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-4 flex flex-col justify-between hover:border-fuchsia-400 transition">
+          <div className="space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center text-fuchsia-400">
+              <LogIn className="w-5 h-5" />
+            </div>
+            <h2 className="text-lg font-bold text-white">Join Room Code</h2>
+            <p className="text-xs text-slate-400">
+              Enter your friend's 4-digit Room Code below to join their match as Player 2 (Magenta).
+            </p>
+          </div>
+
+          <form onSubmit={handleJoinRoom} className="space-y-3">
+            <input
+              type="text"
+              placeholder="Enter Room Code (e.g. GOG-A8B9)"
+              value={joinCode}
+              onChange={(e) => {
+                setJoinCode(e.target.value.toUpperCase());
+                setErrorMsg("");
+              }}
+              className="w-full bg-[#050814] border border-cyan-900/60 rounded-xl px-4 py-3 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 font-mono tracking-wider text-center font-bold"
+            />
+
+            {errorMsg && <p className="text-[11px] text-red-400 font-bold text-center">{errorMsg}</p>}
+
             <button
-              onClick={() => openAuth("login")}
-              className="flex-1 flex items-center justify-center space-x-2 bg-gradient-to-r from-cyan-500 to-fuchsia-600 hover:from-cyan-400 hover:to-fuchsia-500 text-slate-950 font-black text-sm px-6 py-3.5 rounded-xl shadow-[0_0_20px_rgba(56,189,248,0.4)] transition transform hover:scale-105"
+              type="submit"
+              className="w-full bg-gradient-to-r from-fuchsia-600 to-cyan-600 hover:from-fuchsia-500 hover:to-cyan-500 text-white font-black py-3.5 rounded-xl text-xs transition shadow-lg flex items-center justify-center space-x-2"
             >
               <LogIn className="w-4 h-4" />
-              <span>Commander Sign In</span>
+              <span>Join Room</span>
             </button>
-
-            <button
-              onClick={() => openAuth("signup")}
-              className="flex-1 flex items-center justify-center space-x-2 bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-white font-bold text-sm px-6 py-3.5 rounded-xl transition"
-            >
-              <UserPlus className="w-4 h-4 text-cyan-400" />
-              <span>Create Account</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Admin Control Panel (Visible only when logged in as admin/admin) */}
-      {isAdmin && <AdminPanel />}
-
-      {/* Quantum Feature Highlights Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl w-full">
-        <div className="bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-3 hover:border-cyan-400 transition">
-          <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-            <Swords className="w-6 h-6" />
-          </div>
-          <h3 className="text-lg font-bold text-white">Quantum Matchmaking</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Host or join remote 2-player game rooms across devices using instant 4-digit Room Codes.
-          </p>
-        </div>
-
-        <div className="bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-3 hover:border-fuchsia-400 transition">
-          <div className="w-12 h-12 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/30 flex items-center justify-center text-fuchsia-400">
-            <Shield className="w-6 h-6" />
-          </div>
-          <h3 className="text-lg font-bold text-white">Tactical Arsenal</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Save and load multiple custom 21-piece military army loadouts directly into your matches.
-          </p>
-        </div>
-
-        <div className="bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-3 hover:border-amber-400 transition">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Zap className="w-6 h-6" />
-          </div>
-          <h3 className="text-lg font-bold text-white">Stealth Fog of War</h3>
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Opponent unit ranks are completely hidden as mystery cyber cards until secret battle arbitration!
-          </p>
+          </form>
         </div>
       </div>
 
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} defaultTab={authTab} />
+      {/* Open Active Rooms */}
+      {activeRooms.length > 0 && (
+        <div className="bg-[#090D1F]/90 border border-cyan-500/30 rounded-2xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center space-x-2 border-b border-cyan-900/60 pb-2">
+            <Users className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-bold text-white">Active Open Rooms</h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {activeRooms.map((room) => (
+              <div
+                key={room.roomId}
+                onClick={() => {
+                  const playerName = inputName.trim() || "Commander";
+                  saveName(playerName);
+                  joinOnlineRoom(room.roomId, playerName);
+                  router.push(`/room/${room.roomId}`);
+                }}
+                className="bg-[#050814] p-3.5 rounded-xl border border-cyan-900/60 hover:border-cyan-400 cursor-pointer transition flex items-center justify-between"
+              >
+                <div>
+                  <span className="font-mono text-xs font-black text-cyan-400">{room.roomId}</span>
+                  <p className="text-[11px] text-slate-300 font-bold mt-0.5">Host: {room.hostUsername}</p>
+                </div>
+
+                <span
+                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                    room.status === "waiting_for_player2"
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                      : "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
+                  }`}
+                >
+                  {room.status === "waiting_for_player2" ? "Joinable" : "In Game"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
